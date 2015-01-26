@@ -80,6 +80,7 @@ d.renamed =
            Dog_Cost = Answer.dog_cost,
            Plasma_Cost = Answer.plasma_cost,
            Sushi_Cost = Answer.sushi_cost)
+head(d.renamed)
 ```
 
 
@@ -92,6 +93,8 @@ d.gather <- d.renamed %>%
   gather(name, cost, 
            Dog_Anchor, Plasma_Anchor, Sushi_Anchor, 
            Dog_Cost, Plasma_Cost, Sushi_Cost) 
+
+head(d.gather)
 ```
 
 
@@ -99,10 +102,12 @@ Bonus problem: *spread* these data back into a wide format data frame.
 
 ```{r spread}
 d.wide <- spread(d.gather,name, cost)
+head(d.wide)
 
 d.spread = d.gather %>%
   separate(name, c("item", "type"), sep = "_") %>%
   spread(type, cost)
+head(d.spread)
 ```
 
 
@@ -125,6 +130,7 @@ h2 = ggplot(data = d.spread, aes(x = subset(d.spread, item == 'Plasma')$Cost)) +
 h3 = ggplot(data = d.spread, aes(x = subset(d.spread, item == 'Sushi')$Cost)) + geom_histogram() 
 grid.arrange(h1,h2,h3)
 ```
+It seems most estimates of costs land on the rounded estimate or 'rounded' numbers (like 2000, or 2500, or 8 or 7.5). We know that a third of the examples for each category have a rounded anchor, which may be responsible for the rounded estimates. We don't get a real picture of how the histograms relate to anchor condition.
 
 OK, now we turn to the actual data anlysis. We'll be using dplyr verbs to `filter`, `group`,`mutate`, and `summarise` the data.
 
