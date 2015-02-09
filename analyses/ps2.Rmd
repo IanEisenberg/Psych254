@@ -35,16 +35,20 @@ qplot(diamonds$carat, diamonds$price)
 Scatter plots are trivial, and easy to add features to. Modify this plot so that it uses the dataframe rather than working from variables in the general namespace (good to get away from retyping `diamonds$` every time you reference a variable). 
 
 ```{r}
+qplot(carat, price, data = diamonds)
 ```
 
 Try adding clarity and cut, using shape and color as your visual variables. 
 
 ```{r}
+qplot(carat, price, color = clarity, shape = cut, data = diamonds)
 ```
 
 One of the primary benefits of `ggplot2` is the use of facets - also known as small multiples in the Tufte vocabulary. That last plot was probably hard to read. Facets could make it better. Try adding a `facets = x ~ y` argument. `x ~ y` means row facets are by x, column facets by y. 
 
 ```{r}
+qplot(carat, price, color = clarity, shape = cut,
+      facets = cut ~ ., data = diamonds)
 ```
 
 But facets can also get overwhelming. Try to strike a good balance between color, shape, and faceting.
@@ -52,6 +56,8 @@ But facets can also get overwhelming. Try to strike a good balance between color
 HINT: `facets = . ~ x` puts x on the columns, but `facets = ~ x` (no dot) *wraps* the facets. These are underlying calls to different functions, `facet_wrap` (no dot) and `facet_grid` (two arguments). 
 
 ```{r}
+qplot(carat, price, color = clarity,
+      facets = cut ~ ., data = diamonds)
 ```
 
 The basic unit of a ggplot plot is a "geom" - a mapping between data (via an "aesthetic") and a particular geometric configuration on coordinate axes. 
@@ -59,16 +65,20 @@ The basic unit of a ggplot plot is a "geom" - a mapping between data (via an "ae
 Let's try some other geoms and manipulate their parameters. First, try a histogram (`geom="hist"`). 
 
 ```{r}
+qplot(price, geom = 'histogram', color = cut, data = diamonds)
 ```
 
 Now facet your histogram by clarity and cut. 
 
 ```{r}
+qplot(price, geom = 'histogram', color = color, facets = cut ~ ., data = diamonds)
+
 ```
 
 I like a slightly cleaner look to my plots. Luckily, ggplot allows you to add "themes" to your plots. Try doing the same plot but adding `+ theme_bw()` or `+ theme_classic()`. Different themes work better for different applications, in my experience. 
 
 ```{r}
+qplot(price, geom = 'histogram', color = color, facets = cut ~ ., data = diamonds) + theme_bw()
 ```
 
 Part 1B: Exploring ggplot2 using ggplot
@@ -89,12 +99,68 @@ Try writing this as a single set of additions (e.g. one line of R code, though y
 
 
 ```{r}
+d = ggplot(diamonds, aes(x=carat, y=price)) +
+  geom_point(aes(color = carat)) + 
+  
 ```
 
 
 You can also set the aesthetic separately for each geom, and make some great plots this way. Though this can get complicated. Try using `ggplot` to build a histogram of prices. 
 
 ```{r}
+d + 
+geom_rug(alpha = .2)
+
+```
+
+It's useful to use the gridExtra package 
+
+```{r Extra plot}
+library(ggplot2)
+library(gridExtra)
+
+set.seed(42)
+DF <- data.frame(x=rnorm(100,mean=c(1,5)),y=rlnorm(100,meanlog=c(8,6)),group=1:2)
+
+p1 <- ggplot(DF,aes(x=x,y=y,colour=factor(group))) + geom_point() +
+  scale_x_continuous(expand=c(0.02,0)) +
+  scale_y_continuous(expand=c(0.02,0)) +
+  theme_bw() +
+  theme(legend.position="none",plot.margin=unit(c(0,0,0,0),"points"))
+
+theme0 <- function(...) theme( legend.position = "none",
+                               panel.background = element_blank(),
+                               panel.grid.major = element_blank(),
+                               panel.grid.minor = element_blank(),
+                               panel.margin = unit(0,"null"),
+                               axis.ticks = element_blank(),
+                               axis.text.x = element_blank(),
+                               axis.text.y = element_blank(),
+                               axis.title.x = element_blank(),
+                               axis.title.y = element_blank(),
+                               axis.ticks.length = unit(0,"null"),
+                               axis.ticks.margin = unit(0,"null"),
+                               panel.border=element_rect(color=NA),...)
+
+p2 <- ggplot(DF,aes(x=x,colour=factor(group),fill=factor(group))) + 
+  geom_density(alpha=0.5) + 
+  scale_x_continuous(breaks=NULL,expand=c(0.02,0)) +
+  scale_y_continuous(breaks=NULL,expand=c(0.02,0)) +
+  theme_bw() +
+  theme0(plot.margin = unit(c(1,0,0,2.2),"lines")) 
+
+p3 <- ggplot(DF,aes(x=y,colour=factor(group),fill=factor(group))) + 
+  geom_density(alpha=0.5) + 
+  coord_flip()  + 
+  scale_x_continuous(labels = NULL,breaks=NULL,expand=c(0.02,0)) +
+  scale_y_continuous(labels = NULL,breaks=NULL,expand=c(0.02,0)) +
+  theme_bw() +
+  theme0(plot.margin = unit(c(0,1,1.2,0),"lines"))
+
+grid.arrange(arrangeGrob(p2,ncol=2,widths=c(3,1)),
+             arrangeGrob(p1,p3,ncol=2,widths=c(3,1)),
+             heights=c(1,3))
+             
 ```
 
 Part 2: Diving into real data: Sklar et al. (2012)
