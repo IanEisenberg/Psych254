@@ -19,7 +19,6 @@ I've adapted this for psych 254 purposes
 First install and load the package.
 
 ```{r}
-install.packages("ggplot2")
 library(ggplot2)
 ```
 
@@ -27,26 +26,26 @@ Now we're going to use qplot. qplot is the easy interface, meant to replace plot
 
 We're going to be using the diamonds dataset. This is a set of measurements of diamonds, along with their price etc.
 
-```{r}
+```{r examine diamonds}
 head(diamonds)
 qplot(diamonds$carat, diamonds$price)
 ```
 
 Scatter plots are trivial, and easy to add features to. Modify this plot so that it uses the dataframe rather than working from variables in the general namespace (good to get away from retyping `diamonds$` every time you reference a variable). 
 
-```{r}
+```{r scatter diamonds}
 qplot(carat, price, data = diamonds)
 ```
 
 Try adding clarity and cut, using shape and color as your visual variables. 
 
-```{r}
+```{r color diamonds}
 qplot(carat, price, color = clarity, shape = cut, data = diamonds)
 ```
 
 One of the primary benefits of `ggplot2` is the use of facets - also known as small multiples in the Tufte vocabulary. That last plot was probably hard to read. Facets could make it better. Try adding a `facets = x ~ y` argument. `x ~ y` means row facets are by x, column facets by y. 
 
-```{r}
+```{r facet diamonds}
 qplot(carat, price, color = clarity, shape = cut,
       facets = cut ~ ., data = diamonds)
 ```
@@ -55,7 +54,7 @@ But facets can also get overwhelming. Try to strike a good balance between color
 
 HINT: `facets = . ~ x` puts x on the columns, but `facets = ~ x` (no dot) *wraps* the facets. These are underlying calls to different functions, `facet_wrap` (no dot) and `facet_grid` (two arguments). 
 
-```{r}
+```{r facet diamonds some more}
 qplot(carat, price, color = clarity,
       facets = cut ~ ., data = diamonds)
 ```
@@ -64,20 +63,20 @@ The basic unit of a ggplot plot is a "geom" - a mapping between data (via an "ae
 
 Let's try some other geoms and manipulate their parameters. First, try a histogram (`geom="hist"`). 
 
-```{r}
+```{r histogram diamonds}
 qplot(price, geom = 'histogram', color = cut, data = diamonds)
 ```
 
 Now facet your histogram by clarity and cut. 
 
-```{r}
+```{r histogram facet diamonds}
 qplot(price, geom = 'histogram', color = color, facets = cut ~ ., data = diamonds)
 
 ```
 
 I like a slightly cleaner look to my plots. Luckily, ggplot allows you to add "themes" to your plots. Try doing the same plot but adding `+ theme_bw()` or `+ theme_classic()`. Different themes work better for different applications, in my experience. 
 
-```{r}
+```{r clean theme diamonds}
 qplot(price, geom = 'histogram', color = color, facets = cut ~ ., data = diamonds) + theme_bw()
 ```
 
@@ -89,7 +88,7 @@ sometimes easier to use and sometimes a bit more complicated. What I want to sho
 
 `ggplot` is the basic call, where you specify A) a dataframe and B) an aesthetic mapping from variables in the plot space to variables in the dataset. 
 
-```{r}
+```{r ggplot diamonds}
 d <- ggplot(diamonds, aes(x=carat, y=price)) # first you set the aesthetic and dataset
 d + geom_point() # then you add geoms
 d + geom_point(aes(colour = carat)) # and you can keep doing this to add layers to the plot
@@ -98,24 +97,24 @@ d + geom_point(aes(colour = carat)) # and you can keep doing this to add layers 
 Try writing this as a single set of additions (e.g. one line of R code, though you can put in linebreaks). This is the most common workflow for me. 
 
 
-```{r}
+```{r ggscatter diamonds}
 d = ggplot(diamonds, aes(x=carat, y=price)) +
-  geom_point(aes(color = carat)) + 
+  geom_point()
   
 ```
 
 
 You can also set the aesthetic separately for each geom, and make some great plots this way. Though this can get complicated. Try using `ggplot` to build a histogram of prices. 
 
-```{r}
-d + 
-geom_rug(alpha = .2)
+```{r rug diamonds}
+d  +
+geom_rug()
 
 ```
 
 It's useful to use the gridExtra package 
 
-```{r Extra plot}
+```{r Extra plot (copied from internet for future reference)}
 library(ggplot2)
 library(gridExtra)
 
@@ -192,16 +191,26 @@ d.b <- read.csv("../data/sklar_expt6b_corrected.csv")
 Gather these datasets into long form and get rid of the Xs in the headers.
 
 ```{r}
+d.a.gather = d.a %>% 
+  gather(subid, RT, 8:28)
+
+d.b.gather = d.b %>% 
+  gather(subid, RT, 8:28)
 ```
 
 Bind these together. Check out `bind_rows`.
 
 ```{r}
+d_bind = bind_rows(d.a.gather,d.b.gather)
+d_bind$subid = strtoi(gsub("X", "", d_bind$subid))
 ```
 
 Merge these with subject info. You will need to look into merge and its relatives, `left_join` and `right_join`. Call this dataframe `d`, by convention. 
 
 ```{r}
+subinfo$cat.subjective.test = as.factor(subinfo$subjective.test)
+
+d = left_join(subinfo,d_bind)
 ```
 
 Clean up the factor structure.
@@ -212,26 +221,42 @@ levels(d$operand) <- c("addition","subtraction")
 ```
 
 Data Analysis Preliminaries
----------------------------
+--------------------------=
 
 Examine the basic properties of the dataset. First, take a histogram.
 
 ```{r}
+qplot(RT, geom = "histogram", data = d)
 ```
 
 Challenge question: what is the sample rate of the input device they are using to gather RTs?
 
 ```{r}
+qplot(RT, geom = "histogram", binwidth = 1, data = d)
+RT_samples = sort(unique(d$RT))
+sub = RT_samples[RT_samples > 500 & RT_samples < 1000]
+plot(RT_samples)
+plot(sub)
 ```
+
+Here I've plotted a subset of the unique RT's in the dataset. The sampling frequency should be apparent based on the clumping of such unique RTs. This plot shows that there are about 3 'clumps' of RTs every 100 ms. This means that there are 30 samples taken every second. Thus the sampling frequency is ~30 hz.
 
 Sklar et al. did two manipulation checks. Subjective - asking participants whether they saw the primes - and objective - asking them to report the parity of the primes (even or odd) to find out if they could actually read the primes when they tried. Examine both the unconscious and conscious manipulation checks (this information is stored in subinfo). What do you see? Are they related to one another?
 
 ```{r} 
+g = glm(cat.subjective.test ~ objective.test, family = binomial, data =subinfo)
+summary(g)
+with(subinfo,plot(objective.test, subjective.test))
+curve(predict(g,data.frame(objective.test = x), type="resp"), add = T)
 ```
+
+One way we can see if the two measures are related to each other is if the continuous measure predicts the categorical one (a higher value of the continuous measure means a higher probability of a 1). We find that it does - that the objective test significantly predicts the objective test across these participants, validating the claim that these two measures are at least related in some way.
+
 
 OK, let's turn back to the measure and implement Sklar et al.'s exclusion criterion. You need to have said you couldn't see (subjective test) and also be not significantly above chance on the objective test (< .6 correct). Call your new data frame `ds`.
 
 ```{r}
+ds = subset(d, subjective.test == 0 & objective.test < .6)
 ```
 
 Sklar et al.'s analysis
@@ -242,29 +267,104 @@ Sklar et al. show a plot of a "facilitation effect" - the time to respond to inc
 HINT: first take averages within subjects, then compute your error bars across participants, using the `sem` function (defined above). 
 
 ```{r}
+ds_means = group_by(ds,subid,presentation.time, operand, congruent) %>%
+  summarise("mean" = mean(RT, na.rm = T)) %>%
+  spread(congruent,mean)
+ds_means$facilitation = ds_means$no - ds_means$yes
+  
+ds_stats = ds_means %>%
+  group_by(operand, presentation.time) %>% summarise("Mean" = mean(facilitation), "SE"= sem(facilitation))
+
 ```
 
-Now plot this summary, giving more or less the bar plot that Sklar et al. gave (though I would keep operation as a variable here. Make sure you get some error bars on there (e.g. `geom_errorbar` or `geom_linerange`). 
+Now plot this summary, giving more or less t\
+4\he bar plot that Sklar et al. gave (though I would keep operation as a variable here. Make sure you get some error bars on there (e.g. `geom_errorbar` or `geom_linerange`). 
 
 ```{r}
+ggplot(data = ds_stats, aes(x = presentation.time, y = Mean, fill = operand)) + 
+geom_bar(stat = "identity") +
+geom_linerange(aes(ymin = Mean-SE, ymax = Mean+SE)) +
+facet_grid(.~operand) +
+ylab('facilitation (ms)') + 
+xlab('Presentation Duration')
 ```
 
 What do you see here? How close is it to what Sklar et al. report? Do the error bars match? How do you interpret these data? 
 
+While the means for for the subtraction condition are in line with those reported in Sklar et al. 2012, the error bars seem twice as large. 
+
 Challenge problem: verify Sklar et al.'s claim about the relationship between RT and the objective manipulation check.
 
-```{r}
+
+Below is a plot showing the relationship between objective test and facilitation score for the subset of people who 'were not aware' based on the exclusion criteria.
+```{r reduced sample plot}
+temp_df = left_join(ds_means,subinfo, by = "subid")
+subtraction_sub = subset(temp_df, operand == "subtraction")
+ggplot(data = subtraction_sub, aes(objective.test, facilitation)) +
+  geom_point() + geom_smooth(method = "lm")
 ```
+
+
+They said they centered around chance (objective test = .5) when regressing the subtraction facilitation scores on the objective test. They found no significant slope, but a signficiant facilitation when accuracy was at chance. This is a slightly odd centering, as they had already reduced their sample so the maximum objective test was .6. If we carry out their analysis we do arrive at the same numbers:
+
+```{r objective vs. facilitation analysis}
+subtraction_sub$c_obj.test = subtraction_sub$objective.test-.5
+rs = lm(facilitation ~ c_obj.test, data = subtraction_sub)
+summary(rs)
+```
+
+I haven't included it here, but if you use the entire sample you do not find any significant effect. They also calculated a correlation between the two variables (largely recpautiluating the previous analysis.) However, they find a negative correlation, which contradicts their regression and doesn't support their main hypothesis (that chance awareness should have the greatest facilitation effect). I should note that these are also odd analyses as they seem to hypothesize that .5 on the objective test (true random performance) indicates unawareness and this should relate to the facilitation effect. Over the whole range of objective test scores we would therefore expect some kind of quadratic effect, with a facilitation maxima at .5. Anyway, when I do the correlation, I find a positive relationship between the two variables at about the same magnitute that they found a negative correlation. My directionality is in line with the regression as well...
+
+```{r correlation between objective test and facilitation}
+print(cor.test(subtraction_sub$objective.test, subtraction_sub$facilitation))
+```
+
 
 Your own analysis
 -----------------
 
 Show us what you would do with these data, operating from first principles. What's the fairest plot showing a test of Sklar et al.'s original hypothesis that people can do arithmetic "non-consciously"?
 
-```{r}
+Without any a priori reason to differentiate subtraction and addition, it doesn't make sense to separate them. Their point that addition may be 'non-consciously' completed too quickly too afford a priming effect is a weak post-hoc justification for concentrating on subtraction. While this doesn't mean that I wouldn't analyze each operand separately 'just in case', it does mean that I would plot the results for both. So, at the very least their plot should be extended to the bar plot above.
+
+The fundamental question is can an 'unconsciously' perceived prime affect number recognition. One step they took to ensure this unconscious perception was restricting the subjects to those that did not perceive the prime based on two criteria. However, they only restrict the subjects based on those who performed above chance on the parity estimation. This seems reasonable at first, except that under-performance also implies awareness in the same way. The implications of this significantly below-chance performance is unclear. 
+
+Ignoring that, we are interested in a facilitation effect such that congruent primes (those that sum to the target number) lead to faster responses than incongruent primes. One secondary prediction might be that the distance away from the target effects the incongruency effect. They assume a categorical distinction (such that subconscious processing can only afford a 'congruent' or 'incongruent' prime), but this assumption has no evidential basis. A distance metric would therefore be useful to investigate how the degree of incongruency effects RT. This plot would strengthen the main finding either way - either by validating their categorical assumption, or fleshing out the effect of interest. 
+
+
+```{r distance metric}
+ds$distance = ds$target - ds$prime.result
+ggplot(data = ds, aes( x = distance, y = RT, color = congruent))  +
+  geom_point(aes(alpha = .1), position = position_jitter(.1)) + 
+  geom_smooth() + facet_grid(. ~ operand)
+
 ```
+
+These plots strengthen the main finding as they point to the unique effect of congruency in the subtraction condition. However, these plots also should new information - namely that the RT variance for the congruent condition is increased. This is different than a constant shift of the RT distribution. The implications of this increased variance are unclear, but may be due to a probabilistic incorporation of the prime's information such that the boosted performance only occurs occasionally. This plot is the main addition I feel the paper could benefit from in terms of visualization. 
+
 
 Challenge problem: Do you find any statistical support for Sklar et al.'s findings?
 
+This paper defined a facilitation score, which is an uncessary step for proper statistical analysis. They hypothesized that congruency would effect RT, and so we can simply use a linear regression. We include objective test as a nuisance variable, and distance as a possible additional effect. This analysis does not include the operand as a variable, collapsing across addition/subtraction. If we didn't want to include distance as an explicit predictor we could include it as a random effect instead.
+
+We also center around the chance objective test as they did, to aid in the interpretation of main effects.
 ```{r}
+ds$c.obj.test = ds$objective.test - .5
+summary(lm(RT ~ congruent + c.obj.test + abs(distance), data = ds))
 ```
+
+This analysis shows that their main hypothesis is supported - congruent primes lower RT. However, absolute distance from the target also lowers reaction time, indicating that incongruent, but close primes (prime.result= 7 when target = 8) are the worst for performance. In many ways this makes sense as we can imagine that closer numbers create additional response conflict thus increasing RT. The objective test predicts longer RT whichc again indicates that 'below-chance' performance is something to pay attention to, as it doesn't imply lack of awareness.
+
+We can also see how these results interact with operand type: 
+
+```{r }
+summary(lm(RT ~ (congruent + c.obj.test + abs(distance))*operand, data = ds))
+```
+
+Here we see the effect they had shown - namely that the subtraction operand is driving the congruency effect and everything else is insignificant (besides the objective test measure).
+
+Overall, there seems to be some evidence that RT depends on the prime. Regardless of whether the effect is distance dependent or not, any RT difference simplies unconscious processing. The interpretation of this study comes down to one's belief about the true nature of the 'unconscious processing'. This study would have benefited from a larger n where all subjects were at chance for the objective test, rather than at chance *or below*.
+
+
+
+
