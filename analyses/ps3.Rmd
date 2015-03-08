@@ -20,11 +20,27 @@ Let's start by convincing ourselves that t-tests have the appropriate false posi
 First do this using a `for` loop.
 
 ```{r}
+sim_results = c()
+for (i in 1:10000) {
+  sample = rnorm(30,0,1)
+  sim_results[i] = t.test(sample)['p.value'] < .05
+}
+cumavg = cumsum(sim_results)/seq_along(sim_results)
+plot_data = data.frame(cbind('index' = seq_along(sim_results), cumavg))
+ggplot(data = plot_data, aes(index, cumavg)) + geom_point(size = .01) +
+  geom_hline(aes(yintercept = .05, color = "red"), linetype = "dashed")
+
 ```
 
 Next, do this using the `replicate` function:
 
 ```{r}
+sim_results = replicate(10000,t.test(rnorm(30,0,1))['p.value']<.05, simplify = "array")
+sim_results = t(data.frame(sim_results))
+cumavg = cumsum(sim_results)/seq_along(sim_results)
+plot_data = data.frame(cbind('index' = seq_along(sim_results), cumavg))
+ggplot(data = plot_data, aes(index, cumavg)) + geom_point(size = .01) +
+  geom_hline(aes(yintercept = .05, color = "red"), linetype = "dashed")
 ```
 
 Ok, that was a bit boring. Let's try something moderately more interesting - let's implement a p-value sniffing simulation, in the style of Simons, Nelson, & Simonsohn (2011).
@@ -69,6 +85,7 @@ and vitamin C. This is super simple. (Try `?ToothGrowth`).
 First plot the data, we'll use `qplot` to understand how `len` (tooth length) depends on `dose` (amount of Vitamin C) and `supp` (delivery method).
 
 ```{r}
+qplot(data = ToothGrowth, dose, len, color = supp) + geom_smooth()
 ```
 
 So now you see what's going on. 
@@ -76,11 +93,14 @@ So now you see what's going on.
 Next, always make a histogram of the DV before making a linear model! This reveals the distribution and can be helpful in choosing your model type.
 
 ```{r}
+ggplot(data = ToothGrowth, aes(len)) + geom_histogram()
 ```
 
 Now make a linear model of tooth lengths using `lm`. Try making one with main effects and interactions and another with just main  effects. Make sure to assign them to variables so that you can get them later.
 
 ```{r}
+m1 = lm(len ~ dose + supp, data = ToothGrowth)
+m2 = lm(len ~ dose * supp, data = ToothGrowth)
 ```
 
 Now try taking out the intercept, using a -1 term in the formula. what does this do?
