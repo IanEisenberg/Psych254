@@ -10,6 +10,7 @@ This is problem set #3, in which we want you to integrate your knowledge of data
 ```{r}
 library(dplyr)
 library(ggplot2)
+library(car)
 ```
 
 Part 1: Basic simulation and NHST
@@ -50,16 +51,37 @@ Consider this scenario: you have done an experiment, again with 30 participants 
 First, write a function that implements this sampling regime.
 
 ```{r}
-double.sample <- function () {
+double.sample <- function(n, lower=.05, upper=.25) {
+  sample = rnorm(n,0,1)
+  test = t.test(sample)
+  if (test['p.value'] > lower & test['p.value'] < upper) { 
+      sample = rbind(sample, rnorm(n,0,1))
+      test = t.test(sample)
+      return (test['p.value'] < .05)
+    } else { return (test['p.value'] < .05) }
+}
+
+infinite.sample <- function(n, lower=.05, upper=.25, sample = numeric()) {
+  sample = cbind(sample,rnorm(n,0,1))
+  test = t.test(sample)
+  if (test['p.value'] > lower & test['p.value'] < upper) { 
+      return (infinite.sample(n,lower,upper, sample))
+    } else { return (test['p.value'] < .05) }
 }
 ```
 
 Now call this function 10k times and find out what happens. 
 
 ```{r}
+sim_results = replicate(10000,double.sample(30), simplify = "array")
+sim_p = sum(sim_results)/10000
+print(sim_p)
 ```
 
 Is there an inflation of false positives? How bad is it?
+
+**answer**
+There is a slight inflation of p-values. On multiple runs the false positive rate is ~.07.
 
 Now modify this code so that you can investigate this "double the sample" rule in a bit more depth. Let's see what happens when you double the sample ANY time p > .05 (not just when p < .25), or when you do it only if p < .5 or < .75. How do these choices affect the false positive rate?
 
@@ -68,9 +90,28 @@ HINT: Try to do this by making the function `double.sample` take the upper p val
 HINT 2: You may need more samples. Find out by looking at how the results change from run to run.
 
 ```{r}
+#no upper bound, double test whenever p>.05
+sim_results = replicate(30000,double.sample(30, upper = 100), simplify = "array")
+sim_p = sum(sim_results)/30000
+print(sim_p)
+
+#double only if p < .5
+sim_results = replicate(30000,double.sample(30, lower = 0, upper = .5), simplify = "array")
+sim_p = sum(sim_results)/30000
+print(sim_p)
+
+#double only if p < .75
+sim_results = replicate(30000,double.sample(30, lower = 0, upper = .75), simplify = "array")
+sim_p = sum(sim_results)/30000
+print(sim_p)
 ```
 
 What do you conclude on the basis of this simulation? How bad is this kind of data-dependent policy?
+
+**answer**
+Interestingly, repeating the test only when p < some high number doesn't inflate p-values really. This is likely due to the fact that the bias is 'fair', in that there is a chance that the p-value will change its significance either way if it is close to the threshold. Those second two simulations basically show that a policy of "run more subjects if the data isn't conclusive" isn't *that* terrible, as long as the policy is applied evenly regardless of which side of .05 the uncertainty falls.
+
+In contrast, when we add subjects only when we are above the p>.05 threshold, we inflate our false-positive rate to ~.08. Overall, this points to the importance of setting guidelines before data is collected. Uncertainty may be a defensible case, especially if the effect size cannot be estimated well a priori (though piloting may help here). 
 
 
 Part 2: The Linear Model
@@ -101,17 +142,33 @@ Now make a linear model of tooth lengths using `lm`. Try making one with main ef
 ```{r}
 m1 = lm(len ~ dose + supp, data = ToothGrowth)
 m2 = lm(len ~ dose * supp, data = ToothGrowth)
+summary(m1)
+summary(m2)
+print(anova(m1,m2))
 ```
 
 Now try taking out the intercept, using a -1 term in the formula. what does this do?
 
+**Answer** Without an intercept each condition (supplement) is given its own unique value. Thus the common length isn't factored out into its own variable.
+
 ```{r}
+m3 = lm(len ~ dose + supp -1, data = ToothGrowth)
+m4 = lm(len ~ dose * supp -1, data = ToothGrowth)
+summary(m3)
+summary(m4)
 ```
 
 Thought question: Take a moment to interpret the coefficients of the model. 
 Q1 - What are the units?
 Q2 - How does the interaction relate to the plot?
 Q3 - Should there be an interaction in the model? What does it mean? How important is it?
+
+**Answer**
+Q1 - The units of the model are in units of odontoblast length per dose/mg.
+Q2 - The interaction term relates to the increased slope for the VC supplement group. This group has a lower average length/starting length, but the dose/response curve is steeper.
+Q3 - There should be an interaction term. On purely statistical grounds the model with the interaction term explains significantly more variance in the data than the model without the interaction term. This is the statistical equivelent to what we see in the graph - the slopes for the two different supplements are different. The full model is also the more liberal model in that it has less bias. This is because it does not assume the same slope for each supplement and allows each to vary independently. This makes the model slightly less interpretable/easy to use, but gives us a fuller and hopefully more correct picture of the world. Cross-validation could further validate the interaction term as necessary and not just overfitting our data. 
+
+We should note that we saw some leveling-off in the OJ group. This asymptotic growth probably reflects true limits about tooth growth that isn't captured in the model. Our range of doses also doesn't capture the probable asymptote under the VC supplement.
 
 Now make predictions from the model you like the best. What should happen with
 doses of 0, 1.5, 2.5, and 10 under both supplements? 
@@ -121,13 +178,26 @@ HINT: use the `predict` function ...
 HINT 2: you will have to make a dataframe to do the prediction with, so use something like `data.frame(dose=...)`.
 
 ```{r}
+prediction_data = expand.grid(dose = c(0,1.5,2.5,10), supp = c("OJ","VC"))
+prediction_data$predicted_length = predict(m2,prediction_data)
+print(prediction_data)
 ```
 
 Now plot the residuals from the original model. How do they look?
 HINT: `?resid`
 
 ```{r}
+plot(ToothGrowth$dose, resid(m2), xlab="dose", ylab="residuals", main = "Both supplements") + abline(0,0)
+
+#plot for different supplements
+plot(ToothGrowth$dose[ToothGrowth$supp=="OJ"], resid(m2)[ToothGrowth$supp=="OJ"], xlab="dose", ylab="residuals", main = "Supplement: OJ") + abline(0,0)
+
+plot(ToothGrowth$dose[ToothGrowth$supp=="VC"], resid(m2)[ToothGrowth$supp=="VC"], xlab="dose", ylab="residuals", main = "Supplement: VC") + abline(0,0)
+
 ```
+
+**Answer**
+We can see that the model overestimates (negative residuals) the true data at low and high doses and overestimates at a middle dose. This is the classic pattern of residuals for a linear model that doesn't capture a quadratic effect, like the asymtotic performance we saw. 
 
 
 BONUS: test them for normality of distribution using a quantile-quantile plot.
@@ -135,8 +205,12 @@ BONUS: test them for normality of distribution using a quantile-quantile plot.
 HINT: `?qqplot` and `?qqnorm`
 
 ```{r}
+qqnorm(resid(m2), main = "interaction model"); qqline(resid(m2))
+qqnorm(resid(m1), main = "non-interaction model"); qqline(resid(m1))
+
 ```
 
+We can see that the non-interaction model fails to produce normally distributed residuals, while the interactive model does a pretty good job.
 
 2B: Exploratory Linear Modeling
 -------------------------------
@@ -145,17 +219,36 @@ What the heck is going on? Load data from Frank, Vul, Saxe (2011, Infancy), a st
 
 Try to figure out what the most reasonable linear model of the data is.
 
-```{r}
+```{r load Franketal Data}
 d <- read.csv("../data/FVS2011-hands.csv")
-
 ```
+*note* Hand.look is a percentage meausure of looking time and is therefore bound between 0 and 1
 
 Plot that model on the same plot as the data.
 
 HINT: you can do this either using `predict` or (if you are feeling confident of your understanding of the models) using the built-in linear models in `ggplot`'s `geom_smooth`. 
 
-```{r}
+```{r initial plotting}
+#substantial flooring effect
+ggplot(data = d, aes(x = hand.look)) + geom_bar() + facet_grid(.~condition)
+#roughly exponential, transform using logit
+d$hand.look.logit = logit(d$hand.look)
+ggplot(data = d, aes(x = hand.look.logit)) + geom_bar() + facet_grid(.~condition)
+
+#interactive linear model
+ggplot(data = d, aes(x = age, y = hand.look.logit, color = condition)) + geom_point() + geom_smooth(method = "lm")
+#non-linear effects
+ggplot(data = d, aes(x = age, y = hand.look.logit, color = condition)) + geom_point() + geom_smooth() #clearly overfitting
+
 ```
+
+```{r hand time model}
+  m1 = lmer(hand.look.logit ~ age * condition + (condition | subid), data = d)
+  summary(m1)
+```
+
+
+
 
 What do you conclude from this pattern of data?
 
@@ -175,6 +268,9 @@ d$age.group <- factor(d$age.group)
 Always begin with a histogram!
 
 ```{r}
+ggplot(data = d, aes(x = age,  fill = age.group)) + geom_bar()
+
+ggplot(data = d, aes(x = trial, y = correct, color = trial)) + geom_point(position = position_jitter(w = 0,h = .1))
 ```
 
 Brief Confidence Interval Digression
@@ -184,6 +280,8 @@ Start out by setting up a function for a 95% CI using the normal approximation.
 
 ```{r}
 ci95.norm <- function(x) {
+  se = sqrt(mean(x)*(1-mean(x))/length(x))
+  return (c(mean(x)-qnorm(.975)*se, mean(x)+qnorm(.975)*se))
 }
 ```
 
@@ -191,6 +289,8 @@ But the number of participants in a group is likely to be < 30, so let's also co
 
 ```{r}
 ci95.t <- function(x) {
+  se = sqrt(mean(x)*(1-mean(x))/length(x))
+  return (c(mean(x)-qt(.975,length(x))*se, mean(x)+qt(.975,length(x))*se))
 }
 ```
 
@@ -222,12 +322,26 @@ Now make 95% confidence intervals across participants using all the methods abov
 - Bootstrap percentile using `boot.ci`
 - Bootstrap percentile using my code
 
-```{r}
+```{r CI comparison}
+ci95.norm(d$correct)
+ci95.t(d$correct)
+Mike_method = c(mean(d$correct)-ci.low(d$correct), mean(d$correct)+ci.high(d$correct))
+
+mean.fun = function(x, idx) mean(x[idx], na.rm = TRUE)
+boot.ci(boot(d$correct,mean.fun,R =999), type = 'norm')
 ```
 
 Now plot the data by age and condition using `dplyr` and `ggplot2`. Plot some CIs on here - extra credit if you plot all of them and compare visually (you'll need `position = position_dodge()` or some other way to offset them).  
 
 ```{r}
+plot_data = group_by(d,age.group,condition) %>% summarise('proportion.correct' = mean(correct),'ci.low' = ci.low(correct),'ci.high' = ci.high(correct), "ci95t.low" = ci95.t(correct)[1],"ci95t.high" = ci95.t(correct)[2], "ci95n.low" = ci95.norm(correct)[1],"ci95n.high" = ci95.norm(correct)[2])
+
+ggplot(data = plot_data, aes(y = proportion.correct, x = age.group, fill = condition)) +
+geom_bar(stat="identity") +  
+geom_linerange(aes(ymin = proportion.correct-ci.low, ymax = proportion.correct+ci.high)) +
+geom_linerange(aes(ymin = ci95t.low, ymax = ci95t.high), linetype = 2,position=position_jitter(width=.4)) +
+geom_linerange(aes(ymin = ci95n.low, ymax = ci95n.high), linetype = 3,position=position_jitter(width=.4)) +
+  facet_wrap(~condition) 
 ```
 
 What do you conclude about confidence interval computation?
@@ -243,24 +357,31 @@ OK, now do a basic GLM over the entire data frame, using `age.group`, `condition
 
 NOTE: this model is not appropriate, because it assumes that each subject's observations are independent from one another. It's still fine to do the analysis, though: it can tell you a lot about the data and is easy and fast to fit, as long as you know that you can't trust the p-values!
 
-```{r}
+```{r no mixed}
+  m1 = glm(correct ~ age.group * condition, family = "binomial", data = d)
+  summary(m1)
 ```
 
 Let's now use `dplyr` to get data frames for by-items (`msi`) and by-subjects (`mss`) analyses. `msi` should contain the mean ratings for every item and `mss` should contain the mean ratings for every subject.
 
-```{r}
+```{r average score across item and subject}
+msi = group_by(d,trial) %>% summarise('rating'=mean(correct))
+mss = group_by(d,subid) %>% summarise('rating'=mean(correct))
+
 ```
 
 Now do standard linear models on each of these.
 
 NOTE: These are not strictly correct either because of the normal approximation on percent correct (model doesn't know it's 0 - 1 bounded and could give you standard error that goes above 1). Again, useful to do and see what happens.
 
-```{r}
+```{r linear models item and subject}
+
 ```
 
 Do ANOVA on these. Note that ANOVA doesn't let you figure out what is going on with individual levels of age.
 
-```{r}
+```{r anova item and subject}
+
 ```
 
 On to linear mixed effect models. Create the maximal random effects model a la Barr et al. (2013). Does it converge? If not, what will you do to make it converge? (The internet can be your friend here).
@@ -270,19 +391,29 @@ HINT: try simplifying your model to a "semi-maximal" model. Bonus: try using a d
 HINT: make sure that you consider which random effects are appropriate. Consider which observations are within/between subjects. E.g. having a random coefficient for age by subject doesn't make sense, because each subject has only one age.
 
 
-```{r}
+```{r mixed model}
+library(lme4)
+#change optimizer to allow convergence
+m_mixed = glmer(correct ~ condition*age.group + (condition*age.group|trial) + (1|subid), family = "binomial", data = d, control=glmerControl(optimizer="bobyqa"))
+summary(m_mixed)
 ```
 
 How do these coefficients compare with the independent coefficients linear model? What do you conclude?
 
+**answer** The coefficients are very similar. However, two coefficients, age.group3 and the interaction between age.group3 and condition, have much lower test statistics in the mixed model. This probably means that the random effect of trial on these coefficients 'soaked up' some of the variance, lowering our confidence in the fixed effect. We an see that the standard error of these two coefficients is larger in the mixed model
+
 Which random effects make the most difference? Find out using `ranef`. Plot the random effects for subject and item.
 
-```{r}
+```{r mixed random effects}
+ran_effects=ranef(m_mixed)$trial
+ggplot
 ```
 
 Make the minimal random effects model with just a subject intecept. How does this compare?
 
-```{r}
+```{r minimal mixed}
+m_min = glmer(correct ~ condition*age.group + (1|subj), family = "binomial", data = d)
+summary(m_min)
 ```
 
 Get an estimate of the significance value for the coefficient on the `age*condition` interaction by using anova to compare between your semi-maximal model and the model without an intercept.
