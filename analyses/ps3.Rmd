@@ -11,6 +11,7 @@ This is problem set #3, in which we want you to integrate your knowledge of data
 library(dplyr)
 library(ggplot2)
 library(car)
+library(psych)
 ```
 
 Part 1: Basic simulation and NHST
@@ -232,7 +233,7 @@ HINT: you can do this either using `predict` or (if you are feeling confident of
 #substantial flooring effect
 ggplot(data = d, aes(x = hand.look)) + geom_bar() + facet_grid(.~condition)
 #roughly exponential, transform using logit
-d$hand.look.logit = logit(d$hand.look)
+d$hand.look.logit = logit(d$hand.look+.5)
 ggplot(data = d, aes(x = hand.look.logit)) + geom_bar() + facet_grid(.~condition)
 
 #interactive linear model
@@ -242,10 +243,7 @@ ggplot(data = d, aes(x = age, y = hand.look.logit, color = condition)) + geom_po
 
 ```
 
-```{r hand time model}
-  m1 = lmer(hand.look.logit ~ age * condition + (condition | subid), data = d)
-  summary(m1)
-```
+Here the DV was roughly exponentially distributed, and so a logit transformatio nwas used to ...somewhat normalize the data. Importantly, the logit transformation moves the hand looking times (which are percentages of total looking times) into an unbound space (instead of 0-1). This allows standard linear regression to be used to help make sense of the data. Here we see that in the faces_plus condition, where the movies were more complex, children actually spent more time looking at hands as their age increased. it should be noted, however, that there are a substantial number of children who never looked at hands earlier on, particularly in the facesplus condition. This shift from never looking at hands, to occasionally looking at hands may drive a large part of the differential slopes.
 
 
 
@@ -346,6 +344,8 @@ geom_linerange(aes(ymin = ci95n.low, ymax = ci95n.high), linetype = 3,position=p
 
 What do you conclude about confidence interval computation?
 
+We see a typical bias-variance trade off. As our model of the data becomes less paramterized (from normal -> t -> bootstrap) our confidence interval becomes larger. This makes sense in many cases because the mean we are calculating is based off a set equation rather than repeated sampling. While they may come very close (as they are in this case) sampling should lead to a higher variance than the theoretically derived variance in general.
+
 Back to LMEMs
 -------------
 
@@ -365,8 +365,8 @@ NOTE: this model is not appropriate, because it assumes that each subject's obse
 Let's now use `dplyr` to get data frames for by-items (`msi`) and by-subjects (`mss`) analyses. `msi` should contain the mean ratings for every item and `mss` should contain the mean ratings for every subject.
 
 ```{r average score across item and subject}
-msi = group_by(d,trial) %>% summarise('rating'=mean(correct))
-mss = group_by(d,subid) %>% summarise('rating'=mean(correct))
+msi = group_by(d,trial,age.group,condition) %>% summarise('rating'=mean(correct))
+mss = group_by(d,subid,age.group,condition) %>% summarise('rating'=mean(correct))
 
 ```
 
@@ -375,13 +375,18 @@ Now do standard linear models on each of these.
 NOTE: These are not strictly correct either because of the normal approximation on percent correct (model doesn't know it's 0 - 1 bounded and could give you standard error that goes above 1). Again, useful to do and see what happens.
 
 ```{r linear models item and subject}
+msi_m = lm(rating ~ age.group*condition, data = msi)
+mss_m = lm(rating ~ age.group*condition, data = mss)
+summary(msi_m)
+summary(mss_m)
 
 ```
 
 Do ANOVA on these. Note that ANOVA doesn't let you figure out what is going on with individual levels of age.
 
 ```{r anova item and subject}
-
+summary(aov(rating ~ age.group*condition, data = msi))
+summary(aov(rating ~ age.group*condition, data = mss))
 ```
 
 On to linear mixed effect models. Create the maximal random effects model a la Barr et al. (2013). Does it converge? If not, what will you do to make it converge? (The internet can be your friend here).
@@ -405,18 +410,21 @@ How do these coefficients compare with the independent coefficients linear model
 Which random effects make the most difference? Find out using `ranef`. Plot the random effects for subject and item.
 
 ```{r mixed random effects}
-ran_effects=ranef(m_mixed)$trial
-ggplot
+library(lattice)
+dotplot(ranef(m_mixed))
 ```
 
 Make the minimal random effects model with just a subject intecept. How does this compare?
 
 ```{r minimal mixed}
-m_min = glmer(correct ~ condition*age.group + (1|subj), family = "binomial", data = d)
+m_min = glmer(correct ~ condition*age.group + (1|subid), family = "binomial", data = d)
 summary(m_min)
 ```
 
 Get an estimate of the significance value for the coefficient on the `age*condition` interaction by using anova to compare between your semi-maximal model and the model without an intercept.
 
 ```{r}
+anova(m_min,m_mixed)
 ```
+
+**answer** I didn't fully understand this question. If the comparison is to get a sense of how important having the random effect of age*condition, then the anova shows that it doesn't explain a significantly greater portion of the variance. As to answering the actual question asked - I'm not sure.
